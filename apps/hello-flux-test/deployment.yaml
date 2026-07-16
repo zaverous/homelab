@@ -1,0 +1,22 @@
+# Throwaway workload proving the GitOps loop: commit -> Flux reconciles -> cluster
+# updates, with no manual kubectl apply. Safe to delete once the loop is proven.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-flux-test
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-flux-test
+  template:
+    metadata:
+      labels:
+        app: hello-flux-test
+    spec:
+      containers:
+        - name: hello
+          image: nginxdemos/hello:plain-text
+          ports:
+            - containerPort: 80
