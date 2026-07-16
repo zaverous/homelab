@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hello-ci
+  namespace: default
+  labels:
+    app: hello-ci
+spec:
+  selector:
+    matchLabels:
+      app: hello-ci
+  template:
+    metadata:
+      labels:
+        app: hello-ci
+    spec:
+      tolerations:
+        - key: hardware-tier
+          operator: Equal
+          value: low-power
+          effect: PreferNoSchedule
+      containers:
+        - name: hello-ci
+          image: ghcr.io/zaverous/homelab/hello-ci:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 20

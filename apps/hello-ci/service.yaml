@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-ci
+  namespace: default
+spec:
+  selector:
+    app: hello-ci
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP

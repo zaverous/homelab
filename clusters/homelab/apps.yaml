@@ -1,4 +1,4 @@
-# Tells Flux to also reconcile ./apps/hello-flux-test, separate from the
+# Tells Flux to also reconcile ./apps/hello-ci, separate from the
 # flux-system bootstrap files that live alongside this in clusters/homelab/.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -7,7 +7,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 5m0s
-  path: ./apps/hello-flux-test
+  path: ./apps/hello-ci
   prune: true
   sourceRef:
     kind: GitRepository
