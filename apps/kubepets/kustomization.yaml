@@ -5,3 +5,4 @@ resources:
   - postgres.yaml
   - redis.yaml
   - secret.enc.yaml
+  - api-deployment.yaml

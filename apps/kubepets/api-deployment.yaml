@@ -1,0 +1,61 @@
+# KubePets REST API (create/feed/get pet). Runs on debian-server-hp - the only
+# high-power node - via the existing hardware-tier label (no new taint/toleration
+# needed, it's a preference label not a taint). Connects to the in-namespace
+# Postgres StatefulSet over plain TCP (cluster-internal only, no TLS needed here).
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubepets-api
+  namespace: kubepets
+  labels: {app: kubepets-api}
+spec:
+  selector: {app: kubepets-api}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubepets-api
+  namespace: kubepets
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: kubepets-api}
+  template:
+    metadata:
+      labels: {app: kubepets-api}
+    spec:
+      nodeSelector:
+        hardware-tier: high-power
+      containers:
+        - name: kubepets-api
+          image: ghcr.io/zaverous/homelab/kubepets-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PGHOST
+              value: postgres.kubepets.svc.cluster.local
+            - name: PGPORT
+              value: "5432"
+            - name: PGSSLMODE
+              value: disable
+            - name: PGUSER
+              valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_USER}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_PASSWORD}}
+            - name: PGDATABASE
+              valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_DB}}
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits:   {cpu: 500m, memory: 256Mi}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            initialDelaySeconds: 15
+            periodSeconds: 20
