@@ -55,7 +55,11 @@ spec:
             httpGet: {path: /healthz, port: 8080}
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5   # /healthz does a real DB ping (up to 3s) - the
+                                # 1s Kubernetes default was too tight, caused
+                                # real (if intermittent) restarts under load
           livenessProbe:
             httpGet: {path: /healthz, port: 8080}
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 5
