@@ -1,0 +1,17 @@
+# Installs cert-manager itself (CRDs + controller/webhook/cainjector) via Helm.
+# No secrets here, so no decryption needed. See cert-manager-config.yaml for the
+# ClusterIssuer + Cloudflare token, which dependsOn this so its CRDs exist first.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cert-manager
+  namespace: flux-system
+spec:
+  interval: 30m0s
+  path: ./infra/cert-manager
+  prune: true
+  wait: true
+  timeout: 5m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
