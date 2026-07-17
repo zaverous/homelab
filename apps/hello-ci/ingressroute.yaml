@@ -1,0 +1,17 @@
+# Edge-only TLS (ADR-004): Cloudflare terminates HTTPS at its edge and the
+# tunnel forwards plain HTTP to Traefik, so only the "web" entrypoint is
+# needed here - no TLS config on Traefik's side yet.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: hello-ci
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`homelab.zaverous.com`)
+      kind: Rule
+      services:
+        - name: hello-ci
+          port: 80
