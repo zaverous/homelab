@@ -1,0 +1,51 @@
+# KubePets queue worker - BRPOPs the Redis hunger-queue, updates Postgres.
+# Deliberately FORCED onto worker-node-01 (Pi 3B, 905MB) - this is the tier
+# designed to break (Phase 4c/4e): nodeSelector pins it there, toleration lets
+# it actually land despite the node's PreferNoSchedule taint. BATCH_SIZE is the
+# knob that controls how many jobs get held in memory per cycle before writing
+# them - cranking it up on demand is how the OOM/eviction demo gets triggered.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubepets-worker
+  namespace: kubepets
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: kubepets-worker}
+  template:
+    metadata:
+      labels: {app: kubepets-worker}
+    spec:
+      nodeSelector:
+        hardware-tier: low-power
+      tolerations:
+        - key: hardware-tier
+          operator: Equal
+          value: low-power
+          effect: PreferNoSchedule
+      containers:
+        - name: kubepets-worker
+          image: ghcr.io/zaverous/homelab/kubepets-worker:latest
+          env:
+            - name: REDIS_ADDR
+              value: redis.kubepets.svc.cluster.local:6379
+            - name: QUEUE_KEY
+              value: hunger-queue
+            - name: BATCH_SIZE
+              value: "10"
+            - name: PGHOST
+              value: postgres.kubepets.svc.cluster.local
+            - name: PGPORT
+              value: "5432"
+            - name: PGSSLMODE
+              value: disable
+            - name: PGUSER
+              valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_USER}}
+            - name: PGPASSWORD
+              valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_PASSWORD}}
+            - name: PGDATABASE
+              valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_DB}}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits:   {cpu: 200m, memory: 50Mi}
