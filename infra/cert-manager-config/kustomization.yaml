@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - cloudflare-api-token.enc.yaml
   - clusterissuer-staging.yaml
+  - clusterissuer-prod.yaml

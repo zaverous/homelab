@@ -1,0 +1,15 @@
+# Real production Let's Encrypt cert for Traefik to serve on the websecure
+# entrypoint, so the cloudflared -> Traefik hop is genuinely TLS end-to-end
+# (ADR-004: Full strict), not just terminated at Cloudflare's edge.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: homelab-zaverous-com
+  namespace: default
+spec:
+  secretName: homelab-zaverous-com-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - homelab.zaverous.com

@@ -1,6 +1,8 @@
-# Edge-only TLS (ADR-004): Cloudflare terminates HTTPS at its edge and the
-# tunnel forwards plain HTTP to Traefik, so only the "web" entrypoint is
-# needed here - no TLS config on Traefik's side yet.
+# Full (strict) TLS (ADR-004): Traefik serves the real Let's Encrypt cert
+# (see certificate.yaml) on websecure, so cloudflared -> Traefik is genuinely
+# encrypted end-to-end, not just terminated at Cloudflare's edge. Requires the
+# Cloudflare Tunnel's Public Hostname to be switched to service type HTTPS
+# (see infra/cloudflared - that mapping lives in Cloudflare's dashboard, not git).
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -8,10 +10,12 @@ metadata:
   namespace: default
 spec:
   entryPoints:
-    - web
+    - websecure
   routes:
     - match: Host(`homelab.zaverous.com`)
       kind: Rule
       services:
         - name: hello-ci
           port: 80
+  tls:
+    secretName: homelab-zaverous-com-tls
