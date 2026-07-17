@@ -1,0 +1,74 @@
+# Redis — KubePets job queue / message broker. Also PINNED to control-plane-01
+# (Pi 5), alongside Postgres: the "stateful core" lives on the reliable NVMe node.
+# maxmemory caps Redis so a runaway queue cannot OOM the Pi 5 itself — the memory
+# pressure we WANT is on the worker tier (Pi 3B), never here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: kubepets
+  labels: {app: redis}
+spec:
+  selector: {app: redis}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: kubepets
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels: {app: redis}
+  template:
+    metadata:
+      labels: {app: redis}
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: ["control-plane-01"]   # Pi 5
+      containers:
+        - name: redis
+          image: redis:7-alpine                    # multi-arch, arm64-ready
+          args:
+            - --appendonly
+            - "yes"
+            - --maxmemory
+            - "192mb"
+            - --maxmemory-policy
+            - "noeviction"     # full queue -> producers get an error (backpressure)
+                               # instead of silently dropping jobs — correct for a broker
+          ports:
+            - {containerPort: 6379, name: redis}
+          resources:
+            requests: {cpu: 100m, memory: 96Mi}
+            limits:   {cpu: 500m, memory: 256Mi}   # > maxmemory, leaves process overhead
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          readinessProbe:
+            exec: {command: ["redis-cli", "ping"]}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: {command: ["redis-cli", "ping"]}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 1Gi

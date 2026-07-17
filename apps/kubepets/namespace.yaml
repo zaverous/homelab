@@ -1,0 +1,33 @@
+# KubePets namespace + governance. Same LimitRange/ResourceQuota pattern as
+# manifests/namespaces/default-quota.yaml, sized for a multi-component app whose
+# worker tier is deliberately meant to scale until it hits node memory pressure.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubepets
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: kubepets-limits
+  namespace: kubepets
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 25m,  memory: 32Mi}
+      default:        {cpu: 200m, memory: 128Mi}
+      min:            {cpu: 5m,   memory: 16Mi}   # allow the ~40-50Mi worker pods
+      max:            {cpu: "1",  memory: 768Mi}  # Postgres is the largest container
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: kubepets-quota
+  namespace: kubepets
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 2Gi     # deliberately generous — node memory pressure on the
+    limits.cpu: "4"          # Pi 3B should be the binding constraint for the OOM
+    limits.memory: 3Gi       # demo, NOT this quota
+    pods: "40"

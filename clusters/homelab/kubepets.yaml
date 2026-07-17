@@ -1,0 +1,21 @@
+# Flux Kustomization for the KubePets app. Separate from `apps` (which points at
+# ./apps/hello-ci) so there is no path overlap / dual ownership. Carries SOPS
+# decryption because the Postgres credentials live in an encrypted Secret — same
+# pattern as cert-manager-config. `wait: true` so dependents can dependsOn it later.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kubepets
+  namespace: flux-system
+spec:
+  interval: 5m0s
+  path: ./apps/kubepets
+  prune: true
+  wait: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
