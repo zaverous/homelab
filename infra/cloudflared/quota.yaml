@@ -1,0 +1,27 @@
+# Same governance pattern as manifests/namespaces/default-quota.yaml, scaled
+# down for this namespace's one lightweight workload.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cloudflared-limits
+  namespace: cloudflared
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 10m, memory: 32Mi}
+      default:        {cpu: 100m, memory: 128Mi}
+      min:            {cpu: 5m,  memory: 16Mi}
+      max:            {cpu: 500m, memory: 256Mi}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: cloudflared-quota
+  namespace: cloudflared
+spec:
+  hard:
+    requests.cpu: 200m
+    requests.memory: 256Mi
+    limits.cpu: "1"
+    limits.memory: 512Mi
+    pods: "5"
