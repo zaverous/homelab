@@ -39,3 +39,43 @@ export const getPet = (id: number) => request<Pet>(`/pets/${id}`);
 
 export const feedPet = (id: number) =>
   request<Pet>(`/pets/${id}/feed`, { method: "POST" });
+
+// --- auth (stateless JWT cookie sessions; see api/auth.go) ---
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  picture: string;
+}
+
+export interface AuthStatus {
+  enabled: boolean; // false when the API runs without OAuth configured
+  user: User | null;
+}
+
+export const authStatus = () => request<AuthStatus>("/auth/status");
+
+// Login is a full-page redirect (OAuth dance), not an XHR.
+export const loginUrl = `${BASE}/auth/login`;
+
+export const logout = async (): Promise<void> => {
+  const res = await fetch(`${BASE}/auth/logout`, { method: "POST" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+};
+
+// --- chaos engine (dev mode; see api/chaos.go) ---
+
+export interface ChaosResult {
+  requested: number;
+  enqueued: number;
+  queue_depth: number;
+  backpressure: boolean;
+}
+
+export const batchFeed = (count: number) =>
+  request<ChaosResult>("/chaos/batch-feed", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ count }),
+  });

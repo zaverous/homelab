@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType, type SVGProps } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 import {
   EyeR1C1RingPupil,
   EyeR1C2VerticalSlit,
@@ -8,86 +8,142 @@ import {
   EyeR3C2ClosedShortLashes,
 } from "./icons/generated";
 
-// The chaos mechanic (4c spec): as hunger rises, distinct hand-drawn "creepy
-// eye" components spawn at random absolute X/Y positions across the dark. The
-// useEffect adds a batch whenever the target count rises and culls when it
-// falls; existing eyes keep their position/variant (no reshuffle on rerender).
+// The chaos mechanic: hand-drawn eyes that open and close all over the dark.
+// Each eye fades in at a random spot, blinks on its own rhythm (swapping its
+// open drawing to a closed one for a beat), lives a random lifetime, then fades
+// out and removes itself - so eyes are constantly appearing and vanishing
+// somewhere on screen rather than sitting in fixed slots. Population scales with
+// the hungriest pet: calm -> a lone lurker, starving -> a crowd.
 
 type EyeComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
-// First four are open eyes (they get the CSS blink); the closed ones just wait.
-const VARIANTS: EyeComponent[] = [
+const OPEN: EyeComponent[] = [
   EyeR1C1RingPupil,
   EyeR1C2VerticalSlit,
   EyeR2C1HalfOpenPupil,
   EyeR2C2HalfOpenShadow,
-  EyeR3C1ClosedLongLashes,
-  EyeR3C2ClosedShortLashes,
 ];
-const OPEN_VARIANTS = 4;
+const CLOSED: EyeComponent[] = [EyeR3C1ClosedLongLashes, EyeR3C2ClosedShortLashes];
 
-interface Eye {
+interface EyeSpec {
   id: number;
-  variant: number;
   x: number; // vw %
   y: number; // vh %
   size: number; // px
   rot: number; // deg
-  delay: number; // s, staggers the blink so they don't sync
+  open: number; // index into OPEN
+  closed: number; // index into CLOSED
 }
 
-let nextId = 1;
+function Eye({ spec, onGone }: { spec: EyeSpec; onGone: () => void }) {
+  const [shut, setShut] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const gone = useRef(onGone);
+  gone.current = onGone;
 
-function spawnEye(): Eye {
-  return {
-    id: nextId++,
-    variant: Math.floor(Math.random() * VARIANTS.length),
-    x: Math.random() * 92,
-    y: Math.random() * 90,
-    size: 44 + Math.random() * 72,
-    rot: -20 + Math.random() * 40,
-    delay: Math.random() * 5,
-  };
+  useEffect(() => {
+    let alive = true;
+    const timers: number[] = [];
+    const push = (t: number) => timers.push(t);
+
+    // random blink loop - open for a while, snap shut for a beat, repeat
+    const blink = () => {
+      push(
+        window.setTimeout(
+          () => {
+            if (!alive) return;
+            setShut(true);
+            push(
+              window.setTimeout(() => {
+                if (!alive) return;
+                setShut(false);
+                blink();
+              }, 90 + Math.random() * 150),
+            );
+          },
+          1400 + Math.random() * 4200,
+        ),
+      );
+    };
+    blink();
+
+    // finite lifetime -> fade out -> ask the parent to remove us
+    const life = 3500 + Math.random() * 7000;
+    push(window.setTimeout(() => setLeaving(true), life));
+    push(
+      window.setTimeout(() => {
+        alive = false;
+        gone.current();
+      }, life + 1000),
+    );
+
+    return () => {
+      alive = false;
+      timers.forEach(clearTimeout);
+    };
+  }, []);
+
+  const Variant = shut ? CLOSED[spec.closed] : OPEN[spec.open];
+  return (
+    <div
+      className={`creepy-eye ${leaving ? "creepy-eye-leaving" : ""}`}
+      style={{
+        left: `${spec.x}%`,
+        top: `${spec.y}%`,
+        width: spec.size,
+        transform: `rotate(${spec.rot}deg)`,
+      }}
+    >
+      <Variant className="creepy-eye-art" />
+    </div>
+  );
 }
 
 export default function CreepyEyes({ intensity }: { intensity: number }) {
-  // 0 eyes while everyone is fed; ~1 eye per 8 points of worst-case hunger,
-  // capped at 12 so the DOM (and the vibe) stays under control.
-  const target = Math.min(12, Math.floor(Math.max(0, intensity) / 8));
-  const [eyes, setEyes] = useState<Eye[]>([]);
+  const [eyes, setEyes] = useState<EyeSpec[]>([]);
+  const intensityRef = useRef(intensity);
+  intensityRef.current = intensity;
+  const nextId = useRef(1);
 
+  // Director: on a steady tick, drift the population toward a hunger-scaled
+  // target by trickling in eyes at random positions. Eyes remove themselves at
+  // the end of their lifetime, so the count churns organically instead of
+  // snapping to a number.
   useEffect(() => {
-    setEyes((prev) => {
-      if (prev.length === target) return prev;
-      if (prev.length > target) return prev.slice(0, target);
-      const fresh = Array.from({ length: target - prev.length }, spawnEye);
-      return [...prev, ...fresh];
+    const spawn = (): EyeSpec => ({
+      id: nextId.current++,
+      x: 1 + Math.random() * 93,
+      y: 5 + Math.random() * 87,
+      size: 42 + Math.random() * 104,
+      rot: -22 + Math.random() * 44,
+      open: Math.floor(Math.random() * OPEN.length),
+      closed: Math.floor(Math.random() * CLOSED.length),
     });
-  }, [target]);
+    const tick = () => {
+      setEyes((prev) => {
+        // 0 hunger -> ~2 lurkers; 100 -> a crowd (~18)
+        const target = 2 + Math.round((Math.max(0, intensityRef.current) / 100) * 16);
+        if (prev.length >= target) {
+          // occasional extra even at/over target keeps it alive
+          return Math.random() < 0.12 ? [...prev, spawn()] : prev;
+        }
+        const toAdd = target - prev.length > 4 ? 2 : 1;
+        return [...prev, ...Array.from({ length: toAdd }, spawn)];
+      });
+    };
+    const interval = window.setInterval(tick, 420);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const remove = useCallback((id: number) => {
+    setEyes((prev) => prev.filter((e) => e.id !== id));
+  }, []);
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
-      {eyes.map((e) => {
-        const Variant = VARIANTS[e.variant];
-        const blinks = e.variant < OPEN_VARIANTS;
-        return (
-          <div
-            key={e.id}
-            className="emerge absolute"
-            style={{
-              left: `${e.x}%`,
-              top: `${e.y}%`,
-              width: e.size,
-              transform: `rotate(${e.rot}deg)`,
-            }}
-          >
-            <Variant
-              className={`h-auto w-full text-zinc-500 ${blinks ? "blink" : ""}`}
-              style={blinks ? { animationDelay: `${e.delay}s` } : undefined}
-            />
-          </div>
-        );
-      })}
+    <div className="creepy-eyes-layer" aria-hidden>
+      {eyes.map((e) => (
+        <Eye key={e.id} spec={e} onGone={() => remove(e.id)} />
+      ))}
     </div>
   );
 }

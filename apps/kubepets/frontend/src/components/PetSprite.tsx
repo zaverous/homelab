@@ -5,22 +5,25 @@ import {
   CreatureEatMouthOpen,
   CreatureNormal,
   CreatureNormalEyesClosed,
-  CreatureNormalHalfBlink,
   CreatureSad,
   CreatureSmile01,
   CreatureSmile02,
-  CreatureSmile03,
   CreatureWith2Mouth,
   CreatureWith4Eyes,
 } from "./icons/generated";
 
-// Frame-swapping state machine over the hand-drawn creature assets.
-// Mood degrades with hunger; each mood animates from real drawings:
-//   idle      - drifts between the three smiles, blinks occasionally
-//   uneasy    - neutral face, still blinks
-//   gaunt     - the sad face, unblinking. it has stopped pretending.
-//   desperate - MUTATES: cycles angry -> four eyes -> two mouths, trembling
+// One canonical drawing per resting state. The expression is a PURE function of
+// the pet's mood, so it changes exactly when hunger crosses a threshold - never
+// on a timer:
+//   idle      - content (a smile)
+//   uneasy    - neutral
+//   gaunt     - sad. it has stopped pretending.
+//   desperate - angry/afraid (red + trembling via CSS, same drawing)
 //   feeding   - chomp loop (mouth open/closed) while the feed is in flight
+//
+// ...but it REACTS TO BEING WATCHED: hovering the creature swaps to a second
+// expression per mood - it notices you looking, and the closer you get to
+// starvation the less it hides (extra eyes, extra mouths).
 
 export type Mood = "idle" | "uneasy" | "gaunt" | "desperate";
 
@@ -33,8 +36,20 @@ export function moodFor(hunger: number): Mood {
 
 type Frame = ComponentType<SVGProps<SVGSVGElement>>;
 
-const IDLE_FACES: Frame[] = [CreatureSmile01, CreatureSmile02, CreatureSmile03];
-const HORRORS: Frame[] = [CreatureAngry, CreatureWith4Eyes, CreatureWith2Mouth];
+const FACE: Record<Mood, Frame> = {
+  idle: CreatureSmile01,
+  uneasy: CreatureNormal,
+  gaunt: CreatureSad,
+  desperate: CreatureAngry,
+};
+
+// The "it noticed you" face, shown while hovering (or focused).
+const HOVER_FACE: Record<Mood, Frame> = {
+  idle: CreatureSmile02, // perks up, a wider grin
+  uneasy: CreatureNormalEyesClosed, // averts its eyes
+  gaunt: CreatureWith4Eyes, // more eyes open to look back
+  desperate: CreatureWith2Mouth, // it stops hiding the second mouth
+};
 
 const tint: Record<Mood, string> = {
   idle: "text-zinc-300",
@@ -50,81 +65,44 @@ export default function PetSprite({
   mood: Mood;
   feeding?: boolean;
 }) {
-  // 0 = eyes open, 1 = half-blink, 2 = closed
-  const [blink, setBlink] = useState<0 | 1 | 2>(0);
-  // shared frame counter for the chomp / mutation / smile-drift cycles
-  const [cycle, setCycle] = useState(0);
-
-  // chomp while the feed request is in flight
+  // The only per-frame animation left: the chomp while a feed is in flight.
+  const [chomp, setChomp] = useState(false);
   useEffect(() => {
-    if (!feeding) return;
-    const t = setInterval(() => setCycle((c) => c + 1), 220);
+    if (!feeding) {
+      setChomp(false);
+      return;
+    }
+    const t = setInterval(() => setChomp((c) => !c), 200);
     return () => clearInterval(t);
   }, [feeding]);
 
-  // desperate: mutate between the three horror drawings
-  useEffect(() => {
-    if (feeding || mood !== "desperate") return;
-    const t = setInterval(() => setCycle((c) => c + 1), 1600);
-    return () => clearInterval(t);
-  }, [mood, feeding]);
+  // hover/focus: it reacts to being watched (ignored mid-feed - it's busy)
+  const [watched, setWatched] = useState(false);
 
-  // idle: drift lazily between the smile variants
-  useEffect(() => {
-    if (feeding || mood !== "idle") return;
-    const t = setInterval(() => setCycle((c) => c + 1), 7000);
-    return () => clearInterval(t);
-  }, [mood, feeding]);
-
-  // idle/uneasy: blink at random intervals (half -> closed -> half -> open)
-  useEffect(() => {
-    if (feeding || (mood !== "idle" && mood !== "uneasy")) {
-      setBlink(0);
-      return;
-    }
-    let cancelled = false;
-    const timers: number[] = [];
-    const schedule = () => {
-      timers.push(
-        window.setTimeout(() => {
-          if (cancelled) return;
-          setBlink(1);
-          timers.push(window.setTimeout(() => setBlink(2), 110));
-          timers.push(window.setTimeout(() => setBlink(1), 260));
-          timers.push(
-            window.setTimeout(() => {
-              setBlink(0);
-              schedule();
-            }, 370),
-          );
-        }, 3500 + Math.random() * 3500),
-      );
-    };
-    schedule();
-    return () => {
-      cancelled = true;
-      timers.forEach(clearTimeout);
-    };
-  }, [mood, feeding]);
-
-  let Face: Frame;
-  if (feeding) {
-    Face = cycle % 2 ? CreatureEatMouthClosed : CreatureEatMouthOpen;
-  } else if (mood === "desperate") {
-    Face = HORRORS[cycle % HORRORS.length];
-  } else if (mood === "gaunt") {
-    Face = CreatureSad;
-  } else if (blink !== 0) {
-    Face = blink === 2 ? CreatureNormalEyesClosed : CreatureNormalHalfBlink;
-  } else {
-    Face = mood === "idle" ? IDLE_FACES[cycle % IDLE_FACES.length] : CreatureNormal;
-  }
+  const Face: Frame = feeding
+    ? chomp
+      ? CreatureEatMouthClosed
+      : CreatureEatMouthOpen
+    : watched
+      ? HOVER_FACE[mood]
+      : FACE[mood];
 
   return (
-    <Face
-      className={`h-32 w-32 ${feeding ? "text-zinc-200" : tint[mood]} ${
-        mood === "desperate" && !feeding ? "tremble" : ""
-      }`}
-    />
+    <div
+      className={`pet-sprite-frame pet-sprite-${mood} ${feeding ? "pet-sprite-feeding" : ""} ${watched && !feeding ? "pet-sprite-watched" : ""}`}
+      role="img"
+      aria-label={`The creature is ${feeding ? "feeding" : mood}`}
+      tabIndex={0}
+      onMouseEnter={() => setWatched(true)}
+      onMouseLeave={() => setWatched(false)}
+      onFocus={() => setWatched(true)}
+      onBlur={() => setWatched(false)}
+    >
+      <Face
+        className={`pet-sprite-art ${feeding ? "text-zinc-200" : tint[mood]} ${
+          mood === "desperate" && !feeding ? "tremble" : ""
+        }`}
+      />
+    </div>
   );
 }

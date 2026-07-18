@@ -1,7 +1,12 @@
 .claude/CLUSTER_STATE.md
 .claude/settings.local.json
+
+
+.codex/
+
 .dual-graph/
 CLAUDE.md
+AGENTS.md
 
 # frontend build artifacts - never commit (public repo)
 node_modules/
