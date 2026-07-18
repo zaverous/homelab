@@ -1,0 +1,60 @@
+# KubePets load generator - enqueues ~10k hunger events/min into the Redis
+# hunger-queue list, the spike that drives worker autoscaling (4d) and the
+# OOM/eviction endgame (4e/4f).
+#
+# Ships SUSPENDED on purpose: it exists in git but does nothing until you
+# deliberately kick off a demo. This cluster is RAM-scarce - a generator firing
+# 10k events every minute, 24/7, would keep the worker tier (and the Pi 3B)
+# under constant pressure for no reason. Un-suspend only for the demo:
+#   kubectl -n kubepets patch cronjob kubepets-loadgen \
+#     --type merge -p '{"spec":{"suspend":false}}'
+# ...then re-suspend (suspend:true) when done. (Doing it in git works too, but
+# imperative patch keeps the "off" default as the committed state.)
+#
+# Runs on debian-server-hp (high-power, amd64), NOT the Pi 3B it is trying to
+# overload - the generator must not compete for RAM on the node whose OOM is the
+# whole point, or it muddies the very signal we want to capture.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kubepets-loadgen
+  namespace: kubepets
+spec:
+  schedule: "* * * * *" # every minute
+  suspend: true # default OFF - see header
+  concurrencyPolicy: Forbid # never stack a second run on top of a slow one
+  startingDeadlineSeconds: 30
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0 # a failed run just fails - no retry storm
+      activeDeadlineSeconds: 55 # must finish inside its minute
+      template:
+        metadata:
+          labels: {app: kubepets-loadgen}
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            hardware-tier: high-power
+          containers:
+            - name: kubepets-loadgen
+              image: ghcr.io/zaverous/homelab/kubepets-loadgen:latest
+              env:
+                - name: REDIS_ADDR
+                  value: redis.kubepets.svc.cluster.local:6379
+                - name: QUEUE_KEY
+                  value: hunger-queue
+                - name: API_ADDR
+                  value: http://kubepets-api.kubepets.svc.cluster.local:80
+                - name: EVENTS_PER_RUN
+                  value: "10000"
+                - name: MAX_AMOUNT
+                  value: "10"
+                - name: SEED_PETS
+                  value: "5"
+                - name: MAX_QUEUE
+                  value: "0" # 0 = no cap (let the backlog run away for the OOM demo)
+              resources:
+                requests: {cpu: 50m, memory: 32Mi}
+                limits: {cpu: 500m, memory: 64Mi}
