@@ -1,0 +1,51 @@
+# KubePets frontend - nginx serving the static React bundle and reverse-proxying
+# /api to the kubepets-api Service, so the browser sees one same-origin host and
+# only the frontend ever needs a public route (4f). Pinned STRICTLY to
+# debian-server-hp via hostname nodeSelector: amd64 + 3.7GB headroom, and per
+# ADR-001 explicit node scheduling makes the single-arch amd64 image compliant
+# (no multi-arch build needed - QEMU-emulating an npm install for arm64 would
+# be all cost for a node it will never run on).
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubepets-frontend
+  namespace: kubepets
+  labels: {app: kubepets-frontend}
+spec:
+  selector: {app: kubepets-frontend}
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubepets-frontend
+  namespace: kubepets
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: kubepets-frontend}
+  template:
+    metadata:
+      labels: {app: kubepets-frontend}
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: debian-server-hp
+      containers:
+        - name: kubepets-frontend
+          image: ghcr.io/zaverous/homelab/kubepets-frontend:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits:   {cpu: 200m, memory: 64Mi}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            initialDelaySeconds: 10
+            periodSeconds: 20

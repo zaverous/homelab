@@ -1,0 +1,44 @@
+name: Build and push kubepets-frontend
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "apps/kubepets/frontend/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # amd64 ONLY - deliberate departure from the multi-arch pattern. The
+      # deployment pins this workload strictly to debian-server-hp (amd64) by
+      # hostname, which is ADR-001's "explicit node scheduling" branch: a
+      # single-arch image is compliant, and QEMU-emulating a full npm install
+      # for arm64 would roughly 10x the build for a platform it never runs on.
+      - name: Build and push (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/kubepets/frontend
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/kubepets-frontend:latest
+            ghcr.io/${{ github.repository }}/kubepets-frontend:${{ github.sha }}

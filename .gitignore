@@ -2,3 +2,7 @@
 .claude/settings.local.json
 .dual-graph/
 CLAUDE.md
+
+# frontend build artifacts - never commit (public repo)
+node_modules/
+dist/

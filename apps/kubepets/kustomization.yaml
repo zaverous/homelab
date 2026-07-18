@@ -7,3 +7,5 @@ resources:
   - secret.enc.yaml
   - api-deployment.yaml
   - worker-deployment.yaml
+  - loadgen-cronjob.yaml
+  - frontend-deployment.yaml

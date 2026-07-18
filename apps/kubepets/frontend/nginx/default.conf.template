@@ -1,0 +1,32 @@
+# Served by the stock nginx image's envsubst entrypoint: ${API_UPSTREAM} is
+# replaced at container start (default set in the Dockerfile points at the
+# in-cluster kubepets-api Service; overriding it lets the same image be tested
+# against a local API outside the cluster). nginx runtime vars like $uri/$host
+# survive envsubst - it only substitutes defined environment variables.
+server {
+    listen 8080;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # cheap liveness/readiness target - no disk read, no API dependency
+    location = /healthz {
+        return 200 "ok";
+        add_header Content-Type text/plain;
+    }
+
+    # same-origin API: strip the /api prefix and hand off to the Go API
+    # (trailing slash on proxy_pass replaces the matched /api/ with /)
+    location /api/ {
+        proxy_pass http://${API_UPSTREAM}/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SPA fallback - unknown paths get index.html, hashed assets get served
+    location / {
+        try_files $uri /index.html;
+    }
+}
