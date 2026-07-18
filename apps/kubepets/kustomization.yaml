@@ -5,6 +5,7 @@ resources:
   - postgres.yaml
   - redis.yaml
   - secret.enc.yaml
+  - oauth-secret.enc.yaml
   - api-deployment.yaml
   - worker-deployment.yaml
   - loadgen-cronjob.yaml

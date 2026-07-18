@@ -261,3 +261,47 @@ RAM on the Pi 3B).
   second autoscaling abstraction to debug).
 - Revisit: fall back to CPU HPA or a prometheus-adapter metric if KEDA is too heavy
   once 4d lands.
+
+---
+
+## ADR-007: Stateless JWT cookie sessions over server-side session storage
+- Date: 2026-07-18
+- Status: Accepted
+
+### Context
+KubePets gained Google OAuth user accounts, and the platform plan explicitly
+subjects API pods to random OOM kills (chaos demos) with the requirement that
+users must never be logged out by a pod death. Sessions therefore cannot live
+in pod memory. The realistic options: server-side sessions in Postgres, or
+self-contained signed tokens.
+
+### Decision
+Stateless **HS256 JWT session cookies** (`kp_session`, HttpOnly, SameSite=Lax,
+7-day expiry). The token carries the user's id/email/name/picture; every API
+replica shares `JWT_SECRET` (SOPS-encrypted Secret `kubepets-oauth`), so any
+pod validates any request with zero session state and zero DB reads. The OIDC
+issuer is configurable (`OIDC_ISSUER`, default Google) so the full login flow
+is testable against a local fake provider without real Google credentials.
+Auth degrades gracefully: if the secret still holds `REPLACE_ME` placeholders,
+the API boots with auth disabled rather than crash-looping — the deployment
+never depends on the Google OAuth client existing.
+
+### Alternatives considered
+- **Sessions table in Postgres:** also survives pod death and is revocable,
+  but adds a DB round-trip to every request and gives the already-SPOF'd
+  Postgres (ADR-005) a hot path for every page load. Rejected here; the right
+  upgrade if revocation ever matters.
+- **In-memory sessions + sticky routing:** violates the stated constraint
+  outright (OOM kill = mass logout) and fights the HPA. Rejected.
+- **Redis-backed sessions:** Redis is deliberately the chaos target
+  (noeviction, queue floods) — storing auth state in the component we
+  intentionally saturate would couple login to the failure demo. Rejected.
+
+### Consequences
+- Gained: pods are fully stateless (the OOM-kill demo can't log anyone out),
+  no per-request session I/O, trivially horizontal.
+- Gave up: server-side revocation — a stolen/stale session stays valid until
+  expiry (7d). Acceptable for a tamagotchi; mitigations if ever needed: short
+  expiry + refresh, or a small denylist.
+- Note: `/chaos/batch-feed` requires a session when auth is configured — once
+  the frontend goes public (4f), the flood button must not be anonymous.

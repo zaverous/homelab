@@ -48,6 +48,24 @@ spec:
               valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_PASSWORD}}
             - name: PGDATABASE
               valueFrom: {secretKeyRef: {name: kubepets-db, key: POSTGRES_DB}}
+            # chaos engine (/chaos/batch-feed) pushes to the same queue the
+            # workers drain
+            - name: REDIS_ADDR
+              value: redis.kubepets.svc.cluster.local:6379
+            - name: QUEUE_KEY
+              value: hunger-queue
+            # Google OAuth + stateless JWT sessions (ADR-007). All optional:
+            # until the kubepets-oauth Secret carries real values (Google
+            # client from the Cloud Console; placeholders are REPLACE_ME),
+            # the API boots with auth disabled instead of crash-looping.
+            - name: OAUTH_REDIRECT_URL
+              value: https://kubepets.zaverous.com/api/auth/callback
+            - name: GOOGLE_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: GOOGLE_CLIENT_ID, optional: true}}
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: GOOGLE_CLIENT_SECRET, optional: true}}
+            - name: JWT_SECRET
+              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: JWT_SECRET, optional: true}}
           resources:
             requests: {cpu: 50m, memory: 32Mi}
             limits:   {cpu: 500m, memory: 256Mi}
