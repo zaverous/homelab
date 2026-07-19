@@ -34,12 +34,12 @@ spec:
     kubeProxy:
       enabled: false
 
-    # ---- Operator: pin to the amd64 high-power node, cap resources, and skip
+    # ---- Operator: pin to the Pi 5 control-plane node, cap resources, and skip
     #      the admission webhook (validates PrometheusRules - not worth the extra
     #      certgen job + TLS on a tiny cluster).
     prometheusOperator:
       nodeSelector:
-        hardware-tier: high-power
+        kubernetes.io/hostname: control-plane-01
       admissionWebhooks:
         enabled: false
       tls:
@@ -54,7 +54,7 @@ spec:
     prometheus:
       prometheusSpec:
         nodeSelector:
-          hardware-tier: high-power
+          kubernetes.io/hostname: control-plane-01
         retention: 2d
         retentionSize: "5GiB"
         resources:
@@ -79,7 +79,7 @@ spec:
     #      creds come from the SOPS secret, NOT the chart's known default.
     grafana:
       nodeSelector:
-        hardware-tier: high-power
+        kubernetes.io/hostname: control-plane-01
       admin:
         existingSecret: grafana-admin
         userKey: admin-user
@@ -96,7 +96,7 @@ spec:
     #      worker OOMKilled or a node Evicted). Pinned, small.
     kube-state-metrics:
       nodeSelector:
-        hardware-tier: high-power
+        kubernetes.io/hostname: control-plane-01
       resources:
         requests: {cpu: 20m, memory: 48Mi}
         limits:   {cpu: 200m, memory: 128Mi}
