@@ -84,6 +84,9 @@ spec:
         auth.anonymous:
           enabled: true
           org_role: Viewer
+        security:
+          # Private ClusterIP, embedded only by the node-local touch wrapper.
+          allow_embedding: true
       admin:
         existingSecret: grafana-admin
         userKey: admin-user

@@ -7,3 +7,4 @@ resources:
   - noc-serviceaccount.yaml
   - noc-headlamp-rbac.yaml
   - noc-monitoring-rbac.yaml
+  - nodes-rbac.yaml
