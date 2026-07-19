@@ -1,0 +1,33 @@
+# KEDA ScaledObject: scale the queue workers on the ACTUAL Redis backlog, not
+# CPU (the worker blocks on BRPOP and burns almost no CPU even with a deep queue,
+# so CPU would be a useless proxy). This is the Phase 4d payoff - a chaos/loadgen
+# burst spikes hunger-queue and workers scale out on the Pi 3B. (ADR-006)
+#
+# Sizing (moderate, per the 4d decision): 1 baseline worker keeps the queue
+# drained at rest; scale out one worker per ~100 queued events up to 5. So a
+# 5,000-event chaos flood pushes toward the 5-replica ceiling, then it scales
+# back to 1 a minute after the backlog clears. Node-pressure eviction is 4f's
+# job, so this stops short of starving the 905MB node.
+#
+# Redis has no auth here (the worker connects unauthenticated over cluster-
+# internal TCP), so no TriggerAuthentication is needed.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: kubepets-worker
+  namespace: kubepets
+spec:
+  scaleTargetRef:
+    name: kubepets-worker
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  pollingInterval: 15   # check the queue every 15s (default 30) - snappier bursts
+  cooldownPeriod: 60    # scale back down 60s after the queue drains (default 300)
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.kubepets.svc.cluster.local:6379
+        listName: hunger-queue
+        listLength: "100"     # target items PER replica -> 500 queued ~= 5 workers
+        enableTLS: "false"
+        databaseIndex: "0"

@@ -1,0 +1,23 @@
+# The KubePets worker autoscaler (KEDA ScaledObject). Kept in its OWN Flux
+# Kustomization - separate from the `kubepets` app - so the ScaledObject (a KEDA
+# CRD) is only applied AFTER the KEDA operator's CRDs exist. dependsOn keda for
+# the CRDs and kubepets for the worker Deployment it targets. This keeps the core
+# app decoupled: if KEDA is unhealthy, the app still reconciles; only autoscaling
+# waits. (ADR-006)
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kubepets-autoscale
+  namespace: flux-system
+spec:
+  interval: 30m0s
+  path: ./apps/kubepets/autoscale
+  prune: true
+  wait: true
+  timeout: 2m0s
+  dependsOn:
+    - name: keda
+    - name: kubepets
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

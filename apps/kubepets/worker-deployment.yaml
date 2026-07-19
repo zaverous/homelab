@@ -10,7 +10,10 @@ metadata:
   name: kubepets-worker
   namespace: kubepets
 spec:
-  replicas: 1
+  # NOTE: no `replicas:` on purpose. KEDA (apps/kubepets/autoscale) owns the
+  # replica count via the ScaledObject/HPA; pinning it here would make Flux's
+  # server-side apply fight the autoscaler on every reconcile. Defaults to 1 on
+  # first create, then KEDA drives it 1..5 by queue depth.
   selector:
     matchLabels: {app: kubepets-worker}
   template:
