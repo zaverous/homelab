@@ -1,0 +1,111 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: monitoring
+spec:
+  interval: 1h
+  timeout: 12m         # big chart + CRDs; give the first install room
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "87.17.0"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: monitoring
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    # ---- Slim: no Alertmanager (no paging for a homelab demo) ----
+    alertmanager:
+      enabled: false
+
+    # ---- k3s doesn't expose these as separately-scrapeable components, so their
+    #      ServiceMonitors would sit permanently "down". Disable to kill the noise.
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+    kubeProxy:
+      enabled: false
+
+    # ---- Operator: pin to the amd64 high-power node, cap resources, and skip
+    #      the admission webhook (validates PrometheusRules - not worth the extra
+    #      certgen job + TLS on a tiny cluster).
+    prometheusOperator:
+      nodeSelector:
+        hardware-tier: high-power
+      admissionWebhooks:
+        enabled: false
+      tls:
+        enabled: false
+      resources:
+        requests: {cpu: 50m, memory: 96Mi}
+        limits:   {cpu: 300m, memory: 256Mi}
+
+    # ---- Prometheus: short retention + small local-path PVC, pinned, capped.
+    #      Flux uses server-side apply, so the huge operator CRDs install fine
+    #      (client-side apply would blow the 262144-byte annotation limit).
+    prometheus:
+      prometheusSpec:
+        nodeSelector:
+          hardware-tier: high-power
+        retention: 2d
+        retentionSize: "5GiB"
+        resources:
+          requests: {cpu: 100m, memory: 400Mi}
+          limits:   {cpu: 1, memory: 900Mi}
+        # pick up ServiceMonitors/PodMonitors we add later regardless of labels
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: local-path
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 6Gi
+
+    # ---- Grafana: ephemeral (dashboards are provisioned from ConfigMaps each
+    #      boot, so no PVC needed), pinned, ClusterIP (private - reach via
+    #      `kubectl -n monitoring port-forward svc/...-grafana 3000:80`). Admin
+    #      creds come from the SOPS secret, NOT the chart's known default.
+    grafana:
+      nodeSelector:
+        hardware-tier: high-power
+      admin:
+        existingSecret: grafana-admin
+        userKey: admin-user
+        passwordKey: admin-password
+      persistence:
+        enabled: false
+      service:
+        type: ClusterIP
+      resources:
+        requests: {cpu: 50m, memory: 128Mi}
+        limits:   {cpu: 500m, memory: 384Mi}
+
+    # ---- kube-state-metrics: pod/deployment/replica states (this is what shows a
+    #      worker OOMKilled or a node Evicted). Pinned, small.
+    kube-state-metrics:
+      nodeSelector:
+        hardware-tier: high-power
+      resources:
+        requests: {cpu: 20m, memory: 48Mi}
+        limits:   {cpu: 200m, memory: 128Mi}
+
+    # ---- node-exporter: MUST run on ALL nodes incl. the Pi 3B break-tier, so NO
+    #      nodeSelector and tolerate every taint (incl. the low-power one).
+    prometheus-node-exporter:
+      tolerations:
+        - operator: Exists
+      resources:
+        requests: {cpu: 10m, memory: 24Mi}
+        limits:   {cpu: 100m, memory: 64Mi}
