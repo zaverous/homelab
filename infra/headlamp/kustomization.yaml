@@ -4,3 +4,6 @@ resources:
   - namespace.yaml
   - helmrepository.yaml
   - helmrelease.yaml
+  - noc-serviceaccount.yaml
+  - noc-headlamp-rbac.yaml
+  - noc-monitoring-rbac.yaml
