@@ -22,7 +22,19 @@ spec:
   minReplicaCount: 1
   maxReplicaCount: 5
   pollingInterval: 15   # check the queue every 15s (default 30) - snappier bursts
-  cooldownPeriod: 60    # scale back down 60s after the queue drains (default 300)
+  # NOTE: cooldownPeriod only governs scale-to-ZERO, which we don't use (min is
+  # 1). Scale-DOWN from 5->1 is the underlying HPA's job, and its default
+  # stabilization window is 300s. Override it to 60s so workers stand down
+  # promptly once the backlog clears (nicer to watch, still avoids flapping).
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
   triggers:
     - type: redis
       metadata:
