@@ -50,7 +50,8 @@ export interface User {
 }
 
 export interface AuthStatus {
-  enabled: boolean; // false when the API runs without OAuth configured
+  enabled: boolean; // false only when the API has no auth configured at all
+  google: boolean;  // true when "continue with Google" is wired up (optional)
   user: User | null;
 }
 

@@ -57,36 +57,53 @@ type sessionClaims struct {
 	jwt.RegisteredClaims
 }
 
-// newAuthService returns (nil, nil) when auth env isn't configured - the API
-// then runs with auth disabled instead of crash-looping, so the deployment
-// doesn't depend on the Google OAuth client existing yet.
+// googleReady reports whether the "continue with Google" OIDC flow is wired up.
+// Email/password auth needs only the JWT secret, so it works without this.
+func (s *authService) googleReady() bool { return s.cfg != nil && s.verifier != nil }
+
+// newAuthService returns (nil, nil) only when JWT_SECRET is unset - the API then
+// runs with auth fully disabled instead of crash-looping. Google OIDC is layered
+// on top and entirely optional: when its client isn't configured (or its provider
+// can't be reached at startup), email/password auth still comes up. This keeps the
+// two login methods decoupled, so the deployment never depends on a Google OAuth
+// client existing.
 func newAuthService(ctx context.Context) (*authService, error) {
+	unset := func(v string) bool { return v == "" || strings.HasPrefix(v, "REPLACE_ME") }
+
+	secret := os.Getenv("JWT_SECRET")
+	if unset(secret) {
+		log.Printf("auth disabled: JWT_SECRET not configured")
+		return nil, nil
+	}
+	svc := &authService{secret: []byte(secret)}
+
+	// Google OIDC is optional - only wire it when a real OAuth client is present.
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 	clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
 	redirectURL := os.Getenv("OAUTH_REDIRECT_URL")
-	secret := os.Getenv("JWT_SECRET")
-	unset := func(v string) bool { return v == "" || strings.HasPrefix(v, "REPLACE_ME") }
-	if unset(clientID) || unset(clientSecret) || unset(redirectURL) || unset(secret) {
-		log.Printf("auth disabled: GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/OAUTH_REDIRECT_URL/JWT_SECRET not (fully) configured")
-		return nil, nil
+	if unset(clientID) || unset(clientSecret) || unset(redirectURL) {
+		log.Printf("google login disabled: GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET/OAUTH_REDIRECT_URL not (fully) configured (email/password still available)")
+		return svc, nil
 	}
 
 	issuer := envOr("OIDC_ISSUER", "https://accounts.google.com")
 	provider, err := oidc.NewProvider(ctx, issuer)
 	if err != nil {
-		return nil, err
+		// A Google outage or misconfiguration must not take email/password down
+		// with it - degrade to password-only rather than failing startup.
+		log.Printf("google login disabled: OIDC provider init failed for %s: %v (email/password still available)", issuer, err)
+		return svc, nil
 	}
-	return &authService{
-		cfg: &oauth2.Config{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			RedirectURL:  redirectURL,
-			Endpoint:     provider.Endpoint(),
-			Scopes:       []string{oidc.ScopeOpenID, "email", "profile"},
-		},
-		verifier: provider.Verifier(&oidc.Config{ClientID: clientID}),
-		secret:   []byte(secret),
-	}, nil
+	svc.cfg = &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  redirectURL,
+		Endpoint:     provider.Endpoint(),
+		Scopes:       []string{oidc.ScopeOpenID, "email", "profile"},
+	}
+	svc.verifier = provider.Verifier(&oidc.Config{ClientID: clientID})
+	log.Printf("google login enabled")
+	return svc, nil
 }
 
 func (s *authService) mintSession(u SessionUser) (string, error) {
@@ -164,8 +181,9 @@ func secureCookies(r *http.Request) bool {
 
 func (a *app) authStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"enabled": a.auth != nil,
-		"user":    a.sessionUser(r), // null when anonymous
+		"enabled": a.auth != nil,                          // any login method available
+		"google":  a.auth != nil && a.auth.googleReady(),  // Google button worth showing
+		"user":    a.sessionUser(r),                        // null when anonymous
 	})
 }
 
@@ -179,8 +197,8 @@ func (a *app) me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) authLogin(w http.ResponseWriter, r *http.Request) {
-	if a.auth == nil {
-		writeError(w, http.StatusServiceUnavailable, "auth not configured")
+	if a.auth == nil || !a.auth.googleReady() {
+		writeError(w, http.StatusServiceUnavailable, "google login is not configured")
 		return
 	}
 	buf := make([]byte, 16)
@@ -197,8 +215,8 @@ func (a *app) authLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) authCallback(w http.ResponseWriter, r *http.Request) {
-	if a.auth == nil {
-		writeError(w, http.StatusServiceUnavailable, "auth not configured")
+	if a.auth == nil || !a.auth.googleReady() {
+		writeError(w, http.StatusServiceUnavailable, "google login is not configured")
 		return
 	}
 	fail := func(code string, err error) {

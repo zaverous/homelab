@@ -3,10 +3,11 @@ import { forgotPassword, loginUrl, passwordLogin, register, resendVerification }
 
 type Mode = "login" | "register" | "forgot";
 
-// The logged-out gate: Google on top, email/password below. onAuthed fires only
-// after a successful password login (register/forgot just show a status line, no
-// session yet - the user still has to click the emailed link).
-export default function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
+// The logged-out gate: Google on top (only when configured), email/password
+// below. onAuthed fires only after a successful password login (register/forgot
+// just show a status line, no session yet - the user still has to click the
+// emailed link).
+export default function AuthPanel({ onAuthed, google }: { onAuthed: () => void; google: boolean }) {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,11 +64,14 @@ export default function AuthPanel({ onAuthed }: { onAuthed: () => void }) {
     <div className="auth-panel">
       <p className="auth-lede">your creatures are bound to your identity.</p>
 
-      <button className="google-button" onClick={() => { window.location.href = loginUrl; }}>
-        continue with Google
-      </button>
-
-      <div className="auth-or"><span>or</span></div>
+      {google && (
+        <>
+          <button className="google-button" onClick={() => { window.location.href = loginUrl; }}>
+            continue with Google
+          </button>
+          <div className="auth-or"><span>or</span></div>
+        </>
+      )}
 
       <form className="auth-fields" onSubmit={submit}>
         {mode === "register" && (

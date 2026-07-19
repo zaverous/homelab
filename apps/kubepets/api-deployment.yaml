@@ -54,9 +54,11 @@ spec:
               value: redis.kubepets.svc.cluster.local:6379
             - name: QUEUE_KEY
               value: hunger-queue
-            # Google OAuth + stateless JWT sessions (ADR-007). Until the
-            # kubepets-oauth Secret carries real values, the API reports auth
-            # unavailable and refuses access to user-owned pet resources.
+            # Stateless JWT sessions (ADR-007). JWT_SECRET alone enables
+            # email/password auth; Google OAuth is optional and layered on top -
+            # the API wires the "continue with Google" flow only once the
+            # kubepets-oauth Secret carries a real GOOGLE_CLIENT_ID/SECRET
+            # (still REPLACE_ME today, so only email/password is offered).
             - name: OAUTH_REDIRECT_URL
               value: https://homelab.zaverous.com/api/auth/callback
             - name: GOOGLE_CLIENT_ID

@@ -37,7 +37,7 @@ export default function App() {
   // re-read the session (after a password login the cookie is already set)
   const refreshAuth = useCallback(async () => {
     try { setAuth(await authStatus()); }
-    catch { setAuth({ enabled: false, user: null }); setError("identification service unavailable"); }
+    catch { setAuth({ enabled: false, google: false, user: null }); setError("identification service unavailable"); }
   }, []);
 
   const clearReset = useCallback(() => {
@@ -167,7 +167,7 @@ export default function App() {
         )}
         {auth?.enabled && !user && !resetToken && (
           <div className="empty-stage auth-gate">
-            <AuthPanel onAuthed={() => void refreshAuth()} />
+            <AuthPanel google={auth.google} onAuthed={() => void refreshAuth()} />
           </div>
         )}
         {user && loaded && pets.length === 0 && !error
