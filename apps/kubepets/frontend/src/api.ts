@@ -56,13 +56,39 @@ export interface AuthStatus {
 
 export const authStatus = () => request<AuthStatus>("/auth/status");
 
-// Login is a full-page redirect (OAuth dance), not an XHR.
+// Google login is a full-page redirect (OAuth dance), not an XHR.
 export const loginUrl = `${BASE}/auth/login`;
 
 export const logout = async (): Promise<void> => {
   const res = await fetch(`${BASE}/auth/logout`, { method: "POST" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 };
+
+// --- email/password auth (see api/authpassword.go) ---
+
+const jsonPost = <T>(path: string, body: unknown) =>
+  request<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+// register/forgot/resend all return a deliberately vague status string (the API
+// never confirms whether an address exists). login returns the User on success.
+export const register = (email: string, password: string, name: string) =>
+  jsonPost<{ status: string }>("/auth/register", { email, password, name });
+
+export const passwordLogin = (email: string, password: string) =>
+  jsonPost<User>("/auth/login", { email, password });
+
+export const forgotPassword = (email: string) =>
+  jsonPost<{ status: string }>("/auth/forgot", { email });
+
+export const resendVerification = (email: string) =>
+  jsonPost<{ status: string }>("/auth/resend", { email });
+
+export const resetPassword = (token: string, password: string) =>
+  jsonPost<{ status: string }>("/auth/reset", { token, password });
 
 // --- chaos engine (dev mode; see api/chaos.go) ---
 

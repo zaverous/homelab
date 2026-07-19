@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,10 +13,9 @@ import (
 // CronJob, built for the platform team to trigger worker autoscaling and
 // resource-limit failures on demand from the UI's Dev Mode.
 //
-// Jobs use the exact worker payload ({pet_id, amount}) and target ALL pets in
-// the database (chaos is cluster-wide, not owner-scoped). Requires a login
-// when auth is configured - this endpoint will eventually sit on the public
-// internet, and an anonymous self-DoS button would be a gift to strangers.
+// Jobs use the exact worker payload ({pet_id, amount}) but deliberately target
+// pet 0, which cannot exist. The worker and database still perform the full
+// decode/update workload without destroying real gameplay state.
 
 // HungerJob mirrors worker/main.go - one queued hunger increment.
 type HungerJob struct {
@@ -35,8 +33,7 @@ func chaosMax() int {
 }
 
 func (a *app) batchFeed(w http.ResponseWriter, r *http.Request) {
-	if a.auth != nil && a.sessionUser(r) == nil {
-		writeError(w, http.StatusUnauthorized, "log in to unleash chaos")
+	if a.requireUser(w, r) == nil {
 		return
 	}
 
@@ -49,27 +46,6 @@ func (a *app) batchFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	if max := chaosMax(); count < 1 || count > max {
 		writeError(w, http.StatusBadRequest, "count must be between 1 and "+strconv.Itoa(max))
-		return
-	}
-
-	rows, err := a.db.Query(r.Context(), `SELECT id FROM pets`)
-	if err != nil {
-		log.Printf("batchFeed: list pets: %v", err)
-		writeError(w, http.StatusInternalServerError, "failed to list pets")
-		return
-	}
-	defer rows.Close()
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to read pets")
-			return
-		}
-		ids = append(ids, id)
-	}
-	if len(ids) == 0 {
-		writeError(w, http.StatusConflict, "no pets exist to torment")
 		return
 	}
 
@@ -100,8 +76,8 @@ func (a *app) batchFeed(w http.ResponseWriter, r *http.Request) {
 
 	for i := 0; i < count; i++ {
 		payload, err := json.Marshal(HungerJob{
-			PetID:  ids[rand.Intn(len(ids))],
-			Amount: rand.Intn(10) + 1,
+			PetID:  0,
+			Amount: 1,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "marshal failure")

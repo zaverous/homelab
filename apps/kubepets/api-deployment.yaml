@@ -54,18 +54,36 @@ spec:
               value: redis.kubepets.svc.cluster.local:6379
             - name: QUEUE_KEY
               value: hunger-queue
-            # Google OAuth + stateless JWT sessions (ADR-007). All optional:
-            # until the kubepets-oauth Secret carries real values (Google
-            # client from the Cloud Console; placeholders are REPLACE_ME),
-            # the API boots with auth disabled instead of crash-looping.
+            # Google OAuth + stateless JWT sessions (ADR-007). Until the
+            # kubepets-oauth Secret carries real values, the API reports auth
+            # unavailable and refuses access to user-owned pet resources.
             - name: OAUTH_REDIRECT_URL
-              value: https://kubepets.zaverous.com/api/auth/callback
+              value: https://homelab.zaverous.com/api/auth/callback
             - name: GOOGLE_CLIENT_ID
-              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: GOOGLE_CLIENT_ID, optional: true}}
+              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: GOOGLE_CLIENT_ID}}
             - name: GOOGLE_CLIENT_SECRET
-              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: GOOGLE_CLIENT_SECRET, optional: true}}
+              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: GOOGLE_CLIENT_SECRET}}
             - name: JWT_SECRET
-              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: JWT_SECRET, optional: true}}
+              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: JWT_SECRET}}
+            # Transactional email via Resend (verification + password-reset mail).
+            # Only the API key is secret (kubepets-oauth/SMTP_PASSWORD); the rest is
+            # plain config. Cloudflare handles inbound support@ forwarding + the
+            # SPF/DKIM/DMARC DNS that lets this send as zaverous.com - it does NOT
+            # relay outbound mail, hence Resend.
+            - name: SMTP_HOST
+              value: smtp.resend.com
+            - name: SMTP_PORT
+              value: "465"          # implicit TLS
+            - name: SMTP_USERNAME
+              value: resend
+            - name: SMTP_FROM
+              value: noreply@zaverous.com
+            - name: SMTP_REPLY_TO
+              value: support@zaverous.com
+            - name: APP_BASE_URL
+              value: https://homelab.zaverous.com
+            - name: SMTP_PASSWORD
+              valueFrom: {secretKeyRef: {name: kubepets-oauth, key: SMTP_PASSWORD}}
           resources:
             requests: {cpu: 50m, memory: 32Mi}
             limits:   {cpu: 500m, memory: 256Mi}

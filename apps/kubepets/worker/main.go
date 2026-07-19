@@ -102,7 +102,9 @@ func applyBatch(ctx context.Context, db *pgxpool.Pool, batch []HungerJob) {
 	applied := 0
 	for _, job := range batch {
 		tag, err := db.Exec(ctx,
-			`UPDATE pets SET hunger = LEAST(hunger + $1, 100) WHERE id = $2`,
+			`UPDATE pets
+			 SET hunger = LEAST(hunger + $1, 100), hunger_updated_at = now()
+			 WHERE id = $2`,
 			job.Amount, job.PetID)
 		if err != nil {
 			log.Printf("update failed for pet %d: %v", job.PetID, err)

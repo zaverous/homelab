@@ -26,6 +26,8 @@ type app struct {
 	db       *pgxpool.Pool
 	rdb      *redis.Client
 	auth     *authService // nil => auth disabled (env not configured)
+	mail     *mailer      // nil => SMTP not configured (email links logged instead)
+	baseURL  string       // public origin for email links (APP_BASE_URL)
 	queueKey string
 }
 
@@ -91,7 +93,14 @@ func main() {
 		log.Fatalf("auth init: %v", err)
 	}
 
-	a := &app{db: db, rdb: rdb, auth: auth, queueKey: envOr("QUEUE_KEY", "hunger-queue")}
+	a := &app{
+		db:       db,
+		rdb:      rdb,
+		auth:     auth,
+		mail:     newMailer(),
+		baseURL:  os.Getenv("APP_BASE_URL"),
+		queueKey: envOr("QUEUE_KEY", "hunger-queue"),
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /pets", a.createPet)
@@ -99,15 +108,24 @@ func main() {
 	mux.HandleFunc("GET /pets/{id}", a.getPet)
 	mux.HandleFunc("POST /pets/{id}/feed", a.feedPet)
 	mux.HandleFunc("GET /auth/status", a.authStatus)
+	// Google OIDC: GET starts the redirect dance. Password login is a POST to
+	// the same path - method-routed patterns keep them cleanly separate.
 	mux.HandleFunc("GET /auth/login", a.authLogin)
 	mux.HandleFunc("GET /auth/callback", a.authCallback)
 	mux.HandleFunc("POST /auth/logout", a.authLogout)
+	// Email/password: register, login, verify (link), resend, forgot, reset.
+	mux.HandleFunc("POST /auth/register", a.authRegister)
+	mux.HandleFunc("POST /auth/login", a.authPasswordLogin)
+	mux.HandleFunc("GET /auth/verify", a.authVerify)
+	mux.HandleFunc("POST /auth/resend", a.authResend)
+	mux.HandleFunc("POST /auth/forgot", a.authForgot)
+	mux.HandleFunc("POST /auth/reset", a.authReset)
 	mux.HandleFunc("GET /me", a.me)
 	mux.HandleFunc("POST /chaos/batch-feed", a.batchFeed)
 	mux.HandleFunc("GET /healthz", a.healthz)
 
 	addr := envOr("ADDR", ":8080")
-	log.Printf("kubepets-api listening on %s (auth: %v)", addr, auth != nil)
+	log.Printf("kubepets-api listening on %s (auth: %v, mail: %v)", addr, auth != nil, a.mail != nil)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}

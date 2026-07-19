@@ -3,7 +3,7 @@ import { useId } from "react";
 export default function HungerScratch({ value, critical = false }: { value: number; critical?: boolean }) {
   const clipId = useId().replaceAll(":", "");
   const bounded = Math.max(0, Math.min(100, value));
-  const width = 440 * bounded / 100;
+  const progress = bounded / 100;
 
   return (
     <svg
@@ -15,7 +15,14 @@ export default function HungerScratch({ value, critical = false }: { value: numb
     >
       <defs>
         <clipPath id={clipId}>
-          <rect x="0" y="0" width={width} height="42" />
+          <rect
+            className="hunger-clip"
+            x="0"
+            y="0"
+            width="440"
+            height="42"
+            style={{ transform: `scaleX(${progress})` }}
+          />
         </clipPath>
       </defs>
 

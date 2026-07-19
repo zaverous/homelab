@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { authStatus, createPet, feedPet, listPets, loginUrl, logout, type AuthStatus, type Pet } from "./api";
+import { authStatus, createPet, feedPet, listPets, logout, type AuthStatus, type Pet } from "./api";
 import AdoptForm from "./components/AdoptForm";
+import AuthPanel from "./components/AuthPanel";
 import CreepyEyes from "./components/CreepyEyes";
 import DevPanel from "./components/DevPanel";
 import PetCard from "./components/PetCard";
+import ResetPanel from "./components/ResetPanel";
 import Wordmark from "./components/Wordmark";
 
 const POLL_MS = 5000;
@@ -19,7 +21,11 @@ export default function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [devMode, setDevMode] = useState(() => localStorage.getItem(DEV_KEY) === "1");
   const [error, setError] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // a reset link (?reset_token=...) takes over the gate until the user finishes
+  const [resetToken, setResetToken] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("reset_token"));
   const footerClicks = useRef<{ count: number; timer: number }>({ count: 0, timer: 0 });
 
   const refresh = useCallback(async () => {
@@ -28,22 +34,43 @@ export default function App() {
     finally { setLoaded(true); }
   }, []);
 
+  // re-read the session (after a password login the cookie is already set)
+  const refreshAuth = useCallback(async () => {
+    try { setAuth(await authStatus()); }
+    catch { setAuth({ enabled: false, user: null }); setError("identification service unavailable"); }
+  }, []);
+
+  const clearReset = useCallback(() => {
+    setResetToken(null);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
   useEffect(() => {
+    if (!auth?.enabled || !auth.user) {
+      setPets([]);
+      setSelectedId(null);
+      setLoaded(auth !== null);
+      return;
+    }
+    setLoaded(false);
     void refresh();
     const timer = setInterval(() => void refresh(), POLL_MS);
     return () => clearInterval(timer);
-  }, [refresh]);
+  }, [auth?.enabled, auth?.user?.id, refresh]);
 
   useEffect(() => {
-    void authStatus().then(setAuth).catch(() => setAuth({ enabled: false, user: null }));
-    // surface a failed OAuth callback (the API redirects back with ?auth_error=)
+    void refreshAuth();
+    // surface post-redirect signals the API/email links append to the URL
     const params = new URLSearchParams(window.location.search);
     const authError = params.get("auth_error");
     if (authError) {
       setError(`the identification failed. (${authError})`);
       window.history.replaceState(null, "", window.location.pathname);
+    } else if (params.get("verified")) {
+      setFlash("your email is confirmed. the link holds.");
+      window.history.replaceState(null, "", window.location.pathname);
     }
-  }, []);
+  }, [refreshAuth]);
 
   const adopt = async (name: string) => {
     try { const pet = await createPet(name); setSelectedId(pet.id); setShowAdopt(false); await refresh(); }
@@ -56,8 +83,19 @@ export default function App() {
   };
 
   const severLink = async () => {
-    try { await logout(); setAuth((current) => current ? { ...current, user: null } : current); setShowAccount(false); await refresh(); }
+    try {
+      await logout();
+      setAuth((current) => current ? { ...current, user: null } : current);
+      setPets([]);
+      setSelectedId(null);
+      setShowAccount(false);
+    }
     catch (e) { setError(e instanceof Error ? e.message : "the link would not sever"); }
+  };
+
+  const closeDevMode = () => {
+    localStorage.setItem(DEV_KEY, "0");
+    setDevMode(false);
   };
 
   // the hidden switch: click the footer DEV_CLICKS times in quick succession
@@ -90,14 +128,15 @@ export default function App() {
             <Wordmark />
           </button>
           <nav aria-label="Main navigation">
-            <button onClick={() => { setShowOthers((value) => !value); setShowAdopt(false); setShowAccount(false); }}>the others</button>
-            <button onClick={() => { setShowAdopt((value) => !value); setShowOthers(false); setShowAccount(false); }}>adopt</button>
-            {auth?.enabled && !user && <button onClick={() => { window.location.href = loginUrl; }}>identify yourself</button>}
+            {user && <button onClick={() => { setShowOthers((value) => !value); setShowAdopt(false); setShowAccount(false); }}>the others</button>}
+            {user && <button onClick={() => { setShowAdopt((value) => !value); setShowOthers(false); setShowAccount(false); }}>adopt</button>}
+            {auth && !auth.enabled && <button disabled title="OAuth credentials are not configured">identity unavailable</button>}
             {user && <button onClick={() => { setShowAccount((value) => !value); setShowOthers(false); setShowAdopt(false); }}>{user.name.split(" ")[0].toLowerCase() || "you"}</button>}
           </nav>
         </header>
 
         {error && <div className="error-note">{error}</div>}
+        {flash && <div className="flash-note">{flash}</div>}
         {showAdopt && <div className="adopt-drawer"><AdoptForm onAdopt={adopt} /></div>}
         {showOthers && (
           <aside className="pet-selector" aria-label="Choose another pet">
@@ -114,9 +153,28 @@ export default function App() {
           </aside>
         )}
 
-        {loaded && pets.length === 0 && !error ? <div className="empty-stage"><p>{user ? "nothing of yours lives here yet." : "nothing lives here yet."}</p><AdoptForm onAdopt={adopt} /></div> : <main className="pet-home">{selectedPet && <PetCard key={selectedPet.id} pet={selectedPet} onFeed={feed} />}</main>}
+        {auth === null && <div className="empty-stage"><p>checking your mark...</p></div>}
+        {auth && !auth.enabled && (
+          <div className="empty-stage auth-gate" role="status">
+            <p>identification is not configured.</p>
+            <small>The keeper must configure the Google OAuth secret before pets can be accessed.</small>
+          </div>
+        )}
+        {auth?.enabled && !user && resetToken && (
+          <div className="empty-stage auth-gate">
+            <ResetPanel token={resetToken} onDone={clearReset} />
+          </div>
+        )}
+        {auth?.enabled && !user && !resetToken && (
+          <div className="empty-stage auth-gate">
+            <AuthPanel onAuthed={() => void refreshAuth()} />
+          </div>
+        )}
+        {user && loaded && pets.length === 0 && !error
+          ? <div className="empty-stage"><p>nothing of yours lives here yet.</p><AdoptForm onAdopt={adopt} /></div>
+          : user && <main className="pet-home">{selectedPet && <PetCard key={selectedPet.id} pet={selectedPet} onFeed={feed} />}</main>}
 
-        {devMode && <DevPanel onUnleashed={() => void refresh()} />}
+        {devMode && user && <DevPanel onUnleashed={() => void refresh()} onClose={closeDevMode} />}
 
         <footer className="site-footer" onClick={footerClick}>
           {maxHunger >= 75 ? "it is watching you" : "all quiet. for now."}{devMode ? " · dev" : ""}

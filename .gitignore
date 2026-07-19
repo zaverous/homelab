@@ -11,3 +11,6 @@ AGENTS.md
 # frontend build artifacts - never commit (public repo)
 node_modules/
 dist/
+
+# Go build artifacts - never commit (public repo)
+*.exe

@@ -10,3 +10,4 @@ resources:
   - worker-deployment.yaml
   - loadgen-cronjob.yaml
   - frontend-deployment.yaml
+  - ingressroute.yaml

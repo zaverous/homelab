@@ -138,6 +138,22 @@ func (a *app) sessionUser(r *http.Request) *SessionUser {
 	return u
 }
 
+// requireUser is the authorization boundary for user-owned resources. Auth
+// being disabled is an operator configuration error; a missing/invalid cookie
+// is an ordinary unauthenticated request.
+func (a *app) requireUser(w http.ResponseWriter, r *http.Request) *SessionUser {
+	if a.auth == nil {
+		writeError(w, http.StatusServiceUnavailable, "authentication is not configured")
+		return nil
+	}
+	u := a.sessionUser(r)
+	if u == nil {
+		writeError(w, http.StatusUnauthorized, "log in to continue")
+		return nil
+	}
+	return u
+}
+
 // secureCookies: true when the original request came in over HTTPS (directly
 // or via the ingress, which sets X-Forwarded-Proto).
 func secureCookies(r *http.Request) bool {
@@ -224,31 +240,17 @@ func (a *app) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upsert the user; identity is keyed on Google's stable subject id.
-	var u SessionUser
-	err = a.db.QueryRow(r.Context(),
-		`INSERT INTO users (google_sub, email, name, picture)
-		 VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (google_sub)
-		 DO UPDATE SET email = $2, name = $3, picture = $4
-		 RETURNING id, email, name, picture`,
-		claims.Sub, claims.Email, claims.Name, claims.Picture,
-	).Scan(&u.ID, &u.Email, &u.Name, &u.Picture)
+	// Resolve to a single user row - linking to an existing email/password
+	// account with the same address rather than duplicating the person.
+	u, err := a.upsertGoogleUser(r.Context(), claims.Sub, claims.Email, claims.Name, claims.Picture)
 	if err != nil {
 		fail("upsert", err)
 		return
 	}
-
-	session, err := a.auth.mintSession(u)
-	if err != nil {
+	if err := a.issueSession(w, r, u); err != nil {
 		fail("mint", err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookie, Value: session, Path: "/",
-		MaxAge: int(sessionTTL.Seconds()), HttpOnly: true,
-		Secure: secureCookies(r), SameSite: http.SameSiteLaxMode,
-	})
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 

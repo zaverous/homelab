@@ -216,3 +216,167 @@ button { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Interactive state added for authenticated access and gradual hunger. */
+.hunger-clip {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transition: transform 800ms ease-out;
+}
+
+.dev-panel {
+  position: relative;
+}
+
+.dev-panel-close {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+
+.dev-panel-close:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.auth-gate {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.identify-button {
+  border: 1px solid currentColor;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+/* --- email/password auth gate (AuthPanel / ResetPanel) --- */
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  width: min(340px, 86vw);
+  text-align: center;
+}
+
+.auth-lede {
+  font-family: "October Crow", fantasy;
+  font-size: 1.3rem;
+  letter-spacing: .05em;
+  color: #a99e8d;
+}
+
+.google-button {
+  padding: 11px 14px;
+  border: 1px solid #756958;
+  background: transparent;
+  color: #d9cbb7;
+  font-family: "October Crow", fantasy;
+  font-size: 1rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.google-button:hover { border-color: #b29f85; }
+
+/* hairline rule with a centred "or" */
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #6d655b;
+  font-size: .72rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.auth-or::before, .auth-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(164, 145, 120, .22);
+}
+
+.auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.auth-fields input {
+  padding: 11px 4px;
+  color: #d9cbb7;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #665c4f;
+  outline: none;
+  font: inherit;
+}
+.auth-fields input::placeholder { color: #6d655b; }
+.auth-fields input:focus { border-color: #b29f85; }
+.auth-fields button {
+  margin-top: 4px;
+  padding: 10px 17px;
+  border: 1px solid #756958;
+  background: transparent;
+  color: #d9cbb7;
+  font-family: "October Crow", fantasy;
+  font-size: 1rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.auth-fields button:disabled { opacity: .35; cursor: wait; }
+
+.auth-msg { font-size: .78rem; color: #8e8578; }
+.auth-msg-error { color: #dc6857; }
+
+.auth-link {
+  border: 0;
+  background: transparent;
+  color: #b29f85;
+  font-size: .74rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 4px;
+}
+.auth-switch button {
+  border: 0;
+  background: transparent;
+  color: #8e8578;
+  font-size: .74rem;
+  letter-spacing: .03em;
+  cursor: pointer;
+}
+.auth-switch button:hover { color: #d9cbb7; }
+
+/* positive counterpart to .error-note (verification confirmed, etc.) */
+.flash-note {
+  position: fixed;
+  top: 88px;
+  left: 50%;
+  z-index: 40;
+  max-width: min(600px, 80vw);
+  color: #9fb08a;
+  font-size: .72rem;
+  text-align: center;
+  transform: translateX(-50%) rotate(-1deg);
+}
