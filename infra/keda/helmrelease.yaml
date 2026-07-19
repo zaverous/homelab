@@ -24,6 +24,13 @@ spec:
     # nothing infra-critical should run there.
     nodeSelector:
       hardware-tier: high-power
+    # Expose the operator's scaler metrics and let Prometheus discover them.
+    # This powers the NOC queue-depth panel without exposing a new Service.
+    prometheus:
+      operator:
+        enabled: true
+        serviceMonitor:
+          enabled: true
     # This cluster's only StorageClass is node-local; KEDA is stateless, no PVCs.
     resources:
       operator:

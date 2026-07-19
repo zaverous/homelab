@@ -80,6 +80,10 @@ spec:
     grafana:
       nodeSelector:
         kubernetes.io/hostname: control-plane-01
+      grafana.ini:
+        auth.anonymous:
+          enabled: true
+          org_role: Viewer
       admin:
         existingSecret: grafana-admin
         userKey: admin-user

@@ -1,0 +1,36 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: headlamp
+      version: "0.43.0"
+      sourceRef:
+        kind: HelmRepository
+        name: headlamp
+        namespace: headlamp
+  values:
+    replicaCount: 1
+    config:
+      # Kiosk mode: authenticate every visitor as the pod's ServiceAccount, so the
+      # NOC screen needs no token login. Safe HERE because Headlamp is private
+      # (ClusterIP, reached only via a node-local port-forward) AND the SA is bound
+      # to the read-only `view` role below — the screen can inspect, never mutate.
+      unsafeUseServiceAccountToken: true
+    clusterRoleBinding:
+      create: true
+      clusterRoleName: view        # built-in read-only role (NOT cluster-admin)
+    service:
+      type: ClusterIP
+      port: 80
+    # Pin to the amd64 high-power node (debian-server-hp) - the same box that drives
+    # the physical kiosk screen.
+    nodeSelector:
+      hardware-tier: high-power
+    resources:
+      requests: {cpu: 25m, memory: 64Mi}
+      limits:   {cpu: 300m, memory: 192Mi}
