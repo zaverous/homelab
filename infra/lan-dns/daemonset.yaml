@@ -13,7 +13,13 @@ spec:
         app: lan-coredns
     spec:
       hostNetwork: true
-      dnsPolicy: Default
+      # CoreDNS forwards to the router by IP and does not need the node's long
+      # resolver list. An explicit policy avoids kubelet's nameserver-limit
+      # warning on the Pi control plane.
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - 192.168.1.1
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
