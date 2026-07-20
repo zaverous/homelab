@@ -1,6 +1,6 @@
 # Phase 5a: Headlamp - a lightweight read-only Kubernetes UI for the physical NOC
-# kiosk on debian-server-hp. No secrets, so no SOPS decryption. Private ClusterIP;
-# the kiosk reaches it via a node-local port-forward (not exposed on the LAN).
+# kiosk on debian-server-hp. No secrets, so no SOPS decryption. Its Service stays
+# ClusterIP; Traefik exposes a source-IP-allowlisted route to the trusted LAN.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:

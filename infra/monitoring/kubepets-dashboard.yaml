@@ -63,7 +63,7 @@ data:
           "type": "timeseries"
         }
       ],
-      "refresh": "10s",
+      "refresh": "30s",
       "schemaVersion": 41,
       "tags": ["kubepets", "noc", "phase-5a"],
       "templating": {"list": []},

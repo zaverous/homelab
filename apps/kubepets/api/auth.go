@@ -181,9 +181,9 @@ func secureCookies(r *http.Request) bool {
 
 func (a *app) authStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"enabled": a.auth != nil,                          // any login method available
-		"google":  a.auth != nil && a.auth.googleReady(),  // Google button worth showing
-		"user":    a.sessionUser(r),                        // null when anonymous
+		"enabled": a.auth != nil,                         // any login method available
+		"google":  a.auth != nil && a.auth.googleReady(), // Google button worth showing
+		"user":    a.sessionUser(r),                      // null when anonymous
 	})
 }
 
@@ -248,13 +248,20 @@ func (a *app) authCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var claims struct {
-		Sub     string `json:"sub"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
+		Sub           string `json:"sub"`
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil || claims.Sub == "" {
 		fail("claims", err)
+		return
+	}
+	// Email-based account linking is safe only after Google has verified that
+	// the OIDC subject controls the address.
+	if claims.Email == "" || !claims.EmailVerified {
+		fail("email_unverified", errors.New("OIDC provider did not verify the email address"))
 		return
 	}
 

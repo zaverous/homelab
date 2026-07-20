@@ -74,12 +74,12 @@ spec:
                   storage: 6Gi
 
     # ---- Grafana: ephemeral (dashboards are provisioned from ConfigMaps each
-    #      boot, so no PVC needed), pinned, ClusterIP (private - reach via
-    #      `kubectl -n monitoring port-forward svc/...-grafana 3000:80`). Admin
-    #      creds come from the SOPS secret, NOT the chart's known default.
+    #      boot, so no PVC needed), pinned to the HP node, and kept ClusterIP.
+    #      Traefik provides the LAN-only route; admin credentials come from the
+    #      SOPS secret, NOT the chart's known default.
     grafana:
       nodeSelector:
-        kubernetes.io/hostname: control-plane-01
+        hardware-tier: high-power
       grafana.ini:
         auth.anonymous:
           enabled: true

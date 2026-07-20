@@ -16,9 +16,9 @@ spec:
   values:
     replicaCount: 1
     config:
-      # Kiosk mode: authenticate every visitor as the pod's ServiceAccount, so the
-      # NOC screen needs no token login. Safe HERE because Headlamp is private
-      # (ClusterIP, reached only via a node-local port-forward) AND the SA is bound
+      # NOC mode: authenticate every visitor as the pod's ServiceAccount, so the
+      # kiosk needs no token login. Headlamp remains a ClusterIP and its Traefik
+      # route accepts only the trusted LAN; the SA is bound
       # to the read-only `view` role below — the screen can inspect, never mutate.
       unsafeUseServiceAccountToken: true
     clusterRoleBinding:
