@@ -1,5 +1,6 @@
-# LAN-only read-only cluster UI. Local DNS points this name at the HP node;
-# Traefik rejects requests originating outside the trusted home subnet.
+# LAN-only read-only cluster UI. Local DNS points this name at the HP node.
+# K3s' service load balancer SNATs LAN requests through the pod and service
+# CIDRs, so the middleware trusts the home subnet and both forwarding paths.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -9,6 +10,8 @@ spec:
   ipAllowList:
     sourceRange:
       - 192.168.1.0/24
+      - 10.42.0.0/16
+      - 10.43.0.0/16
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
